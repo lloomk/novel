@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>web novel viewer</title>
+    <title>Web Novel Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
     <style>
@@ -44,14 +44,17 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        #touch-center-zone {
+        /* 터치 감지 구역 */
+        #touch-zones-container {
             position: fixed;
-            top: 25%;
-            left: 20%;
-            width: 60%;
-            height: 50%;
-            z-index: 10;
+            inset: 0;
+            z-index: 5;
+            display: flex;
+            pointer-events: none;
         }
+        .touch-zone { pointer-events: auto; height: 100%; }
+        .side-zone { width: 20%; }
+        .center-zone { width: 60%; }
         
         .overlay {
             background-color: rgba(0, 0, 0, 0.4);
@@ -75,6 +78,10 @@
         .viewer-dark-bg { background-color: #121212 !important; }
         .viewer-dark-text { color: #FFFFFF !important; }
         .viewer-dark-border { border-color: #333333 !important; }
+        
+        /* 확인 모달 애니메이션 */
+        .modal-enter { transform: scale(0.95); opacity: 0; }
+        .modal-active { transform: scale(1); opacity: 1; transition: all 0.2s ease-out; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-900">
@@ -106,6 +113,13 @@
 
     <!-- 뷰어 화면 -->
     <div id="viewer-screen" class="hidden fixed inset-0 z-50 overflow-y-auto no-scrollbar">
+        <!-- 터치 구역 레이어 -->
+        <div id="touch-zones-container">
+            <div class="touch-zone side-zone" onclick="confirmMove('prev')"></div>
+            <div class="touch-zone center-zone" onclick="toggleUI()"></div>
+            <div class="touch-zone side-zone" onclick="confirmMove('next')"></div>
+        </div>
+
         <nav id="viewer-top-bar" class="fixed top-0 left-0 right-0 bg-white border-b z-30 px-4 h-16 flex justify-between items-center transition-transform duration-300">
             <button onclick="closeViewer()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -116,8 +130,6 @@
             </button>
         </nav>
 
-        <div id="touch-center-zone"></div>
-
         <main id="viewer-main" class="viewer-container">
             <div id="viewer-chapter-title" class="text-xl font-bold mb-10 pb-4 border-b"></div>
             <div id="viewer-text" class="chapter-content"></div>
@@ -125,11 +137,23 @@
 
         <div id="viewer-bottom-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t z-30 p-4 transition-transform duration-300">
             <div class="max-w-md mx-auto flex justify-between items-center">
-                <button onclick="prevChapter()" class="px-6 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 tracking-widest">이전 화</button>
+                <button onclick="confirmMove('prev')" class="px-6 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 tracking-widest">이전 화</button>
                 <button onclick="toggleSettings()" class="bg-gray-100 p-3 rounded-full hover:bg-gray-200 shadow-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>
                 </button>
-                <button onclick="nextChapter()" class="px-6 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 tracking-widest">다음 화</button>
+                <button onclick="confirmMove('next')" class="px-6 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 tracking-widest">다음 화</button>
+            </div>
+        </div>
+
+        <!-- 이동 확인 모달 -->
+        <div id="confirm-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-6">
+            <div class="absolute inset-0 overlay" onclick="closeConfirmModal()"></div>
+            <div id="modal-box" class="relative bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl modal-enter">
+                <h3 id="modal-message" class="text-center font-bold text-gray-900 mb-6 py-4">다음 화로 넘어갈까요?</h3>
+                <div class="flex gap-3">
+                    <button onclick="closeConfirmModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold">취소</button>
+                    <button id="modal-confirm-btn" class="flex-1 py-3 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200">확인</button>
+                </div>
             </div>
         </div>
 
@@ -142,8 +166,8 @@
                     <div>
                         <span class="text-xs text-gray-400 uppercase font-black tracking-widest">배경 테마</span>
                         <div class="flex gap-3 mt-3">
-                            <button onclick="setTheme('light')" class="flex-1 py-4 border-2 rounded-2xl bg-white text-gray-900 border-gray-100 hover:border-indigo-500 font-bold">라이트</button>
-                            <button onclick="setTheme('dark')" class="flex-1 py-4 border-2 rounded-2xl bg-gray-900 text-white border-gray-800 hover:border-indigo-500 font-bold">다크</button>
+                            <button onclick="setTheme('light')" class="flex-1 py-4 border-2 rounded-2xl bg-white text-gray-900 border-gray-100 hover:border-indigo-500 font-bold transition-all">라이트</button>
+                            <button onclick="setTheme('dark')" class="flex-1 py-4 border-2 rounded-2xl bg-gray-900 text-white border-gray-800 hover:border-indigo-500 font-bold transition-all">다크</button>
                         </div>
                     </div>
                     <div>
@@ -239,13 +263,11 @@
             renderLibrary();
             applySettings();
 
-            // 자동 이어보기 체크
             const lastId = localStorage.getItem('last_opened_novel_id');
             if (lastId && library.some(n => n.id === lastId)) {
                 openViewer(lastId);
             }
 
-            document.getElementById('touch-center-zone').onclick = toggleUI;
             document.getElementById('file-upload').onchange = handleFileUpload;
 
             const viewer = document.getElementById('viewer-screen');
@@ -254,8 +276,9 @@
                 const dist = e.changedTouches[0].pageY - scrollStartY;
                 const pos = viewer.scrollTop;
                 const max = viewer.scrollHeight - viewer.clientHeight;
-                if (pos >= max - 30 && dist < -120) nextChapter();
-                if (pos <= 30 && dist > 120) prevChapter();
+                // 스크롤 이동 감도는 그대로 유지 (사용자가 의도적으로 밀 때)
+                if (pos >= max - 20 && dist < -150) confirmMove('next');
+                if (pos <= 20 && dist > 150) confirmMove('prev');
             };
         };
 
@@ -370,7 +393,7 @@
             document.getElementById('library-screen').classList.add('hidden');
             document.getElementById('viewer-screen').classList.remove('hidden');
             renderChapter();
-            uiVisible = true; toggleUI(); 
+            uiVisible = false; toggleUI(); 
         }
 
         function closeViewer() {
@@ -387,6 +410,7 @@
 
         function renderChapter() {
             const novel = library.find(n => n.id === currentNovelId);
+            if (!novel) return;
             const chapter = novel.chapters[currentChapterIndex];
             const titleEl = document.getElementById('viewer-chapter-title');
             titleEl.innerText = chapter.title;
@@ -397,21 +421,53 @@
             saveToDB(novel);
         }
 
-        function nextChapter() {
+        // --- 페이지 이동 로직 ---
+        function confirmMove(dir) {
             const novel = library.find(n => n.id === currentNovelId);
-            if (currentChapterIndex < novel.chapters.length - 1) {
-                currentChapterIndex++;
-                renderChapter();
-                showToast((currentChapterIndex + 1) + "화");
+            if (dir === 'next') {
+                if (currentChapterIndex >= novel.chapters.length - 1) {
+                    showToast("마지막 화입니다.");
+                    return;
+                }
+                openConfirmModal("다음 화로 넘어갈까요?", () => {
+                    currentChapterIndex++;
+                    renderChapter();
+                    closeConfirmModal();
+                    showToast((currentChapterIndex + 1) + "화");
+                });
+            } else {
+                if (currentChapterIndex <= 0) {
+                    showToast("첫 화입니다.");
+                    return;
+                }
+                openConfirmModal("이전 화로 돌아갈까요?", () => {
+                    currentChapterIndex--;
+                    renderChapter();
+                    closeConfirmModal();
+                    showToast((currentChapterIndex + 1) + "화");
+                });
             }
         }
 
-        function prevChapter() {
-            if (currentChapterIndex > 0) {
-                currentChapterIndex--;
-                renderChapter();
-                showToast((currentChapterIndex + 1) + "화");
-            }
+        function openConfirmModal(msg, onConfirm) {
+            const modal = document.getElementById('confirm-modal');
+            const box = document.getElementById('modal-box');
+            document.getElementById('modal-message').innerText = msg;
+            document.getElementById('modal-confirm-btn').onclick = onConfirm;
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                box.classList.remove('modal-enter');
+                box.classList.add('modal-active');
+            }, 10);
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            const box = document.getElementById('modal-box');
+            box.classList.remove('modal-active');
+            box.classList.add('modal-enter');
+            setTimeout(() => modal.classList.add('hidden'), 200);
         }
 
         function toggleUI() {
@@ -490,3 +546,4 @@
     </script>
 </body>
 </html>
+
