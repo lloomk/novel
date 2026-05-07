@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -44,7 +45,6 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 터치 감지 구역 */
         #touch-zones-container {
             position: fixed;
             inset: 0;
@@ -79,7 +79,6 @@
         .viewer-dark-text { color: #FFFFFF !important; }
         .viewer-dark-border { border-color: #333333 !important; }
         
-        /* 확인 모달 애니메이션 */
         .modal-enter { transform: scale(0.95); opacity: 0; }
         .modal-active { transform: scale(1); opacity: 1; transition: all 0.2s ease-out; }
     </style>
@@ -94,7 +93,7 @@
                 <div class="flex gap-4 items-center">
                     <div id="upload-loading" class="hidden flex items-center gap-2 text-sm text-indigo-600 font-bold">
                         <div class="loading-spinner"></div>
-                        처리 중...
+                        분석 중...
                     </div>
                     <label id="upload-label" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-full cursor-pointer transition-all shadow-lg flex items-center gap-2 font-bold">
                         파일 업로드
@@ -113,7 +112,6 @@
 
     <!-- 뷰어 화면 -->
     <div id="viewer-screen" class="hidden fixed inset-0 z-50 overflow-y-auto no-scrollbar">
-        <!-- 터치 구역 레이어 -->
         <div id="touch-zones-container">
             <div class="touch-zone side-zone" onclick="confirmMove('prev')"></div>
             <div class="touch-zone center-zone" onclick="toggleUI()"></div>
@@ -157,7 +155,7 @@
             </div>
         </div>
 
-        <!-- 설정 (항상 라이트) -->
+        <!-- 설정 -->
         <div id="settings-panel" class="fixed inset-0 z-40 hidden flex items-end sm:items-center justify-center p-4">
             <div class="absolute inset-0 overlay" onclick="toggleSettings()"></div>
             <div class="relative bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-8 shadow-2xl text-gray-900">
@@ -190,7 +188,7 @@
             </div>
         </div>
 
-        <!-- 목차 (항상 라이트) -->
+        <!-- 목차 -->
         <div id="toc-panel" class="fixed inset-0 z-40 hidden">
             <div class="absolute inset-0 overlay" onclick="toggleToc()"></div>
             <div class="absolute top-0 right-0 h-full w-[85%] max-w-xs bg-white shadow-2xl flex flex-col text-gray-900">
@@ -276,7 +274,6 @@
                 const dist = e.changedTouches[0].pageY - scrollStartY;
                 const pos = viewer.scrollTop;
                 const max = viewer.scrollHeight - viewer.clientHeight;
-                // 스크롤 이동 감도는 그대로 유지 (사용자가 의도적으로 밀 때)
                 if (pos >= max - 20 && dist < -150) confirmMove('next');
                 if (pos <= 20 && dist > 150) confirmMove('prev');
             };
@@ -310,6 +307,11 @@
             reader.readAsText(file, "UTF-8");
         }
 
+        /**
+         * 회차 분할 로직 수정
+         * 1. #001 형식의 패턴을 최우선으로 인식
+         * 2. 본문 리스트형(1., 2.) 패턴 제외
+         */
         function splitChapters(text) {
             return new Promise((resolve) => {
                 setTimeout(() => {
@@ -317,11 +319,17 @@
                     const chapters = [];
                     let currentBody = [];
                     let currentTitle = "시작";
-                    const pattern = /^(?:제\s?)?\d+\s?화|^Chapter\s?\d+|^[0-9]+\./i;
+                    
+                    // 정규식 설명: 
+                    // ^#\d{3,} : 줄 시작이 #과 3자리 이상의 숫자 (예: #001)
+                    // (?:제\s?)?\d+\s?화 : 제1화, 1화 등
+                    // Chapter\s?\d+ : Chapter 1 등
+                    const pattern = /^#\d{3,}|^(?:제\s?)?\d+\s?화|^Chapter\s?\d+/i;
 
                     for (let line of lines) {
                         const t = line.trim();
-                        if (pattern.test(t) && t.length < 50) {
+                        // 패턴에 맞고 제목으로 적절한 길이(60자 이내)인 경우 새로운 회차로 인식
+                        if (pattern.test(t) && t.length < 60) {
                             if (currentBody.length > 0 || chapters.length > 0) {
                                 chapters.push({ title: currentTitle, body: currentBody.join('\n').trim() });
                             }
@@ -331,8 +339,14 @@
                             currentBody.push(line);
                         }
                     }
-                    chapters.push({ title: currentTitle, body: currentBody.join('\n').trim() });
-                    resolve(chapters.filter(c => c.body.length > 0));
+                    // 마지막 회차 추가
+                    if (currentBody.length > 0 || currentTitle !== "시작") {
+                        chapters.push({ title: currentTitle, body: currentBody.join('\n').trim() });
+                    }
+
+                    // 내용이 너무 적은 더미 데이터 필터링
+                    const result = chapters.filter(c => c.body.length > 5 || c.title !== "시작");
+                    resolve(result.length > 0 ? result : [{ title: "전체", body: text }]);
                 }, 0);
             });
         }
@@ -359,7 +373,7 @@
                         <div class="overflow-hidden flex-1">
                             <h3 class="font-bold truncate text-gray-900 text-sm">${novel.title}</h3>
                             <p class="text-[10px] text-gray-500 font-bold uppercase mt-1">
-                                <span class="text-indigo-600">${progressNum}화</span> 읽는 중 / 총 ${totalNum}화
+                                <span class="text-indigo-600">${progressNum}화</span> / 총 ${totalNum}화
                             </p>
                         </div>
                         <button onclick="deleteNovel('${novel.id}', event)" class="p-2 text-gray-300 hover:text-red-500 transition-colors ml-2">
@@ -386,7 +400,7 @@
             const novel = library.find(n => n.id === id);
             if (!novel) return;
             currentNovelId = id;
-            currentChapterIndex = novel.lastReadIndex || 0;
+            currentChapterIndex = Math.min(novel.lastReadIndex || 0, novel.chapters.length - 1);
             localStorage.setItem('last_opened_novel_id', id);
 
             document.getElementById('viewer-title').innerText = novel.title;
@@ -410,7 +424,7 @@
 
         function renderChapter() {
             const novel = library.find(n => n.id === currentNovelId);
-            if (!novel) return;
+            if (!novel || !novel.chapters[currentChapterIndex]) return;
             const chapter = novel.chapters[currentChapterIndex];
             const titleEl = document.getElementById('viewer-chapter-title');
             titleEl.innerText = chapter.title;
@@ -421,7 +435,6 @@
             saveToDB(novel);
         }
 
-        // --- 페이지 이동 로직 ---
         function confirmMove(dir) {
             const novel = library.find(n => n.id === currentNovelId);
             if (dir === 'next') {
@@ -429,22 +442,24 @@
                     showToast("마지막 화입니다.");
                     return;
                 }
-                openConfirmModal("다음 화로 넘어갈까요?", () => {
+                const nextTitle = novel.chapters[currentChapterIndex+1].title;
+                openConfirmModal(`[${nextTitle}] 다음 화로 이동할까요?`, () => {
                     currentChapterIndex++;
                     renderChapter();
                     closeConfirmModal();
-                    showToast((currentChapterIndex + 1) + "화");
+                    showToast(`${currentChapterIndex + 1}화 이동`);
                 });
             } else {
                 if (currentChapterIndex <= 0) {
                     showToast("첫 화입니다.");
                     return;
                 }
-                openConfirmModal("이전 화로 돌아갈까요?", () => {
+                const prevTitle = novel.chapters[currentChapterIndex-1].title;
+                openConfirmModal(`[${prevTitle}] 이전 화로 이동할까요?`, () => {
                     currentChapterIndex--;
                     renderChapter();
                     closeConfirmModal();
-                    showToast((currentChapterIndex + 1) + "화");
+                    showToast(`${currentChapterIndex + 1}화 이동`);
                 });
             }
         }
