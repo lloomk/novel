@@ -45,7 +45,7 @@
             padding: 80px 20px 140px 20px;
         }
 
-        /* 글꼴 강제 적용 규칙: Tailwind의 기본 폰트 재정의 방지 */
+        /* 글꼴 강제 적용 규칙 */
         .font-myeongjo, .font-myeongjo * { font-family: var(--font-serif) !important; }
         .font-gothic, .font-gothic * { font-family: var(--font-sans) !important; }
         .font-batang, .font-batang * { font-family: var(--font-batang) !important; }
@@ -300,6 +300,7 @@
         let scrollStartY = 0;
 
         let selectedTextInfo = null;
+        let selectionTimeout = null; // 메모리 낭비를 잡을 디바운스 타이머 객체
 
         window.onload = async () => {
             await initDB();
@@ -368,10 +369,11 @@
                 }
             };
 
-            document.addEventListener('selectionchange', handleTextSelection);
-            
-            viewer.addEventListener('touchend', () => setTimeout(handleTextSelection, 100));
-            viewer.addEventListener('mouseup', () => setTimeout(handleTextSelection, 100));
+            // [메모리 최적화 핵심]: selectionchange 이벤트에 디바운싱 처리 (200ms 단위로만 무거운 로직을 일괄 연산)
+            document.addEventListener('selectionchange', () => {
+                if (selectionTimeout) clearTimeout(selectionTimeout);
+                selectionTimeout = setTimeout(handleTextSelection, 200);
+            });
 
             viewer.addEventListener('click', (e) => {
                 if (e.target.closest('#bookmark-tooltip') || e.target.closest('.bookmark-highlight')) return;
@@ -576,6 +578,9 @@
                 .replace(/'/g, "&#039;");
         }
 
+        /**
+         * 최적화된 텍스트 드래그 감지 엔진 (CPU 과부하 해결)
+         */
         function handleTextSelection() {
             const selection = window.getSelection();
             const text = selection.toString().trim();
@@ -587,9 +592,11 @@
                 return;
             }
 
-            const range = selection.getRangeAt(0);
+            // 본문 영역 바깥에서 선택한 경우 연산 즉시 중단
             const textContainer = document.getElementById('viewer-text');
-
+            if (selection.rangeCount === 0) return;
+            
+            const range = selection.getRangeAt(0);
             if (!textContainer.contains(range.commonAncestorContainer)) {
                 tooltip.classList.add('hidden');
                 selectedTextInfo = null;
@@ -859,7 +866,6 @@
             main.style.fontSize = settings.fontSize + 'px';
             document.getElementById('font-size-display').innerText = settings.fontSize + 'px';
             
-            // 기존 테마 및 강제 글꼴 클래스 동시 업데이트
             main.className = `viewer-container font-${settings.fontFamily}`;
 
             if (isDark) {
