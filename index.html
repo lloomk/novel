@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -253,6 +254,7 @@
         };
         let uiVisible = false;
         let scrollStartY = 0;
+        let scrollSaveTimeout = null;
 
         window.onload = async () => {
             await initDB();
@@ -276,7 +278,33 @@
                 if (pos >= max - 20 && dist < -150) confirmMove('next');
                 if (pos <= 20 && dist > 150) confirmMove('prev');
             };
+
+            // 스크롤이 변경될 때마다 현재 위치를 저장 (성능 최적화를 위해 디바운스 적용)
+            viewer.onscroll = () => {
+                if (scrollSaveTimeout) clearTimeout(scrollSaveTimeout);
+                scrollSaveTimeout = setTimeout(() => {
+                    saveScrollPosition();
+                }, 150);
+            };
         };
+
+        // 스크롤 위치를 소설 데이터 및 IndexedDB에 저장하는 함수
+        function saveScrollPosition() {
+            if (!currentNovelId) return;
+            const novel = library.find(n => n.id === currentNovelId);
+            if (!novel) return;
+
+            const viewer = document.getElementById('viewer-screen');
+            
+            // 소설 데이터에 회차별 스크롤 데이터를 보관하는 객체가 없으면 새로 생성
+            if (!novel.lastScrollTop) {
+                novel.lastScrollTop = {};
+            }
+            
+            // 현재 회차의 마지막 스크롤 위치 기록
+            novel.lastScrollTop[currentChapterIndex] = viewer.scrollTop;
+            saveToDB(novel);
+        }
 
         async function handleFileUpload(e) {
             const file = e.target.files[0];
@@ -294,6 +322,7 @@
                     title: file.name.replace('.txt', ''),
                     chapters: chapters,
                     lastReadIndex: 0,
+                    lastScrollTop: {}, // 스크롤 위치 기록용 객체 추가
                     addedAt: new Date().toISOString()
                 };
                 await saveToDB(novel);
@@ -428,7 +457,11 @@
             const titleEl = document.getElementById('viewer-chapter-title');
             titleEl.innerText = chapter.title;
             document.getElementById('viewer-text').innerText = chapter.body;
-            document.getElementById('viewer-screen').scrollTop = 0;
+            
+            // 기존 스크롤 기록 복원
+            const viewer = document.getElementById('viewer-screen');
+            const savedScroll = novel.lastScrollTop && novel.lastScrollTop[currentChapterIndex] ? novel.lastScrollTop[currentChapterIndex] : 0;
+            viewer.scrollTop = savedScroll;
             
             novel.lastReadIndex = currentChapterIndex;
             saveToDB(novel);
