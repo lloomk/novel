@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     <title>Web Novel Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght=400;700&family=Noto+Sans+KR:wght=400;700&family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --font-serif: 'Noto Serif KR', serif;
@@ -45,9 +45,10 @@
             padding: 80px 20px 140px 20px;
         }
 
-        .font-myeongjo { font-family: var(--font-serif); }
-        .font-gothic { font-family: var(--font-sans); }
-        .font-batang { font-family: var(--font-batang); }
+        /* 글꼴 강제 적용 규칙: Tailwind의 기본 폰트 재정의 방지 */
+        .font-myeongjo, .font-myeongjo * { font-family: var(--font-serif) !important; }
+        .font-gothic, .font-gothic * { font-family: var(--font-sans) !important; }
+        .font-batang, .font-batang * { font-family: var(--font-batang) !important; }
 
         .chapter-content {
             white-space: pre-wrap;
@@ -135,8 +136,6 @@
 
     <!-- 뷰어 화면 -->
     <div id="viewer-screen" class="hidden fixed inset-0 z-50 overflow-y-auto no-scrollbar">
-        <!-- 터치 존 레이어 완전 삭제: 본문 드래그 선택 기능 보장 목적 -->
-
         <nav id="viewer-top-bar" class="fixed top-0 left-0 right-0 bg-white border-b z-30 px-4 h-16 flex justify-between items-center transition-transform duration-300">
             <button onclick="closeViewer()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -148,7 +147,7 @@
                     <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
                 </button>
                 <button onclick="toggleToc()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
             </div>
         </nav>
@@ -300,7 +299,6 @@
         let uiVisible = false;
         let scrollStartY = 0;
 
-        // 드래그 선택 영역 임시 저장을 위한 오브젝트
         let selectedTextInfo = null;
 
         window.onload = async () => {
@@ -318,7 +316,6 @@
 
             const viewer = document.getElementById('viewer-screen');
             
-            // 터치 슬라이드 제스처를 위한 감지기 수동 유지 (이전화/다음화)
             viewer.ontouchstart = (e) => { scrollStartY = e.touches[0].pageY; };
             viewer.ontouchend = (e) => {
                 const dist = e.changedTouches[0].pageY - scrollStartY;
@@ -328,14 +325,12 @@
                 if (pos <= 20 && dist > 150) confirmMove('prev');
             };
 
-            // 가로 터치 위치 인식을 통한 화면 전환 및 UI 토글링 (투명 터치 존 대안 최적화 방식)
+            // 가로 터치 위치 인식을 통한 화면 전환 및 UI 토글링
             viewer.onclick = (e) => {
-                // 사용자가 텍스트를 드래그 선택 중일 때는 토글 및 넘기기 방지
                 if (window.getSelection().toString().trim().length > 0) {
                     return;
                 }
 
-                // 특정 조작 패널이나 버튼을 누른 경우는 무시
                 if (e.target.closest('#viewer-top-bar') || 
                     e.target.closest('#viewer-bottom-bar') || 
                     e.target.closest('#confirm-modal') || 
@@ -350,21 +345,17 @@
                 const clickX = e.clientX;
                 const screenWidth = window.innerWidth;
 
-                // 좌측 20%: 이전화 이동
                 if (clickX < screenWidth * 0.2) {
                     confirmMove('prev');
                 } 
-                // 우측 20%: 다음화 이동
                 else if (clickX > screenWidth * 0.8) {
                     confirmMove('next');
                 } 
-                // 중앙 60%: 메뉴바 토글
                 else {
                     toggleUI();
                 }
             };
 
-            // 스크롤 탑 실시간 저장
             viewer.onscroll = () => {
                 if (!currentNovelId) return;
                 const novel = library.find(n => n.id === currentNovelId);
@@ -377,20 +368,16 @@
                 }
             };
 
-            // 드래그 탐지 (기본 및 모바일 공통)
             document.addEventListener('selectionchange', handleTextSelection);
             
-            // 터치 끝 시점에도 모바일 오차 대비 추가 트래킹
             viewer.addEventListener('touchend', () => setTimeout(handleTextSelection, 100));
             viewer.addEventListener('mouseup', () => setTimeout(handleTextSelection, 100));
 
-            // 배경 클릭 시 툴팁 숨기기
             viewer.addEventListener('click', (e) => {
                 if (e.target.closest('#bookmark-tooltip') || e.target.closest('.bookmark-highlight')) return;
                 hideBookmarkTooltip();
             });
 
-            // 북마크 툴팁 클릭 시 이벤트 트리거
             document.getElementById('bookmark-tooltip').onmousedown = (e) => {
                 e.preventDefault(); 
                 addBookmark();
@@ -589,9 +576,6 @@
                 .replace(/'/g, "&#039;");
         }
 
-        /**
-         * 텍스트 드래그 감지 엔진 (툴팁 조절)
-         */
         function handleTextSelection() {
             const selection = window.getSelection();
             const text = selection.toString().trim();
@@ -690,9 +674,6 @@
             }
         }
 
-        /**
-         * 이전 화 / 다음 화 넘어가기 모달 메시지 수정 적용
-         */
         function confirmMove(dir) {
             const novel = library.find(n => n.id === currentNovelId);
             if (dir === 'next') {
@@ -787,9 +768,6 @@
             });
         }
 
-        /**
-         * 북마크 목록 패널 렌더링
-         */
         function renderBookmarks() {
             const novel = library.find(n => n.id === currentNovelId);
             const list = document.getElementById('bookmark-list');
@@ -880,6 +858,8 @@
 
             main.style.fontSize = settings.fontSize + 'px';
             document.getElementById('font-size-display').innerText = settings.fontSize + 'px';
+            
+            // 기존 테마 및 강제 글꼴 클래스 동시 업데이트
             main.className = `viewer-container font-${settings.fontFamily}`;
 
             if (isDark) {
